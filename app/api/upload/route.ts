@@ -3,6 +3,7 @@ import { createDocument, updateDocument } from "@/lib/mongodb";
 import { error } from "console";
 import { NextResponse, NextRequest } from "next/server";
 import { generateEmbeddings } from '@/lib/ai/embeddings';
+import { storeVectors } from "@/lib/pinecone";
 
 export async function POST(request: NextRequest) {
   try {
@@ -65,7 +66,53 @@ export async function POST(request: NextRequest) {
 
 
     // 6- Store vectors in Pinecone
+    const vectorCount = await storeVectors(
+      documentId,
+      embeddings,
+      {
+        title: file.name.replace(/\.[^/.]+$/, ''), // Remove file extension
+        filename: file.name,
+        fileType: file.name.split('.').pop()?.toLowerCase() || 'unknown',
+      }
+    );
+
+
+
     // 7- Update document in MongoDB whith completion status
+    await updateDocument(documentId, {
+      status: 'completed',
+      processedAt: new Date(),
+      chunkCount: chunks.length,
+      vectorCount,
+      contentLength: content.length,
+    });
+
+
+
     // 8- Return success response
-  } catch (error) {}
+    return NextResponse.json({
+      success: true,
+      documentId,
+      filename: file.name,
+      message: `Successfully processed ${chunks.length} chunks and stored ${vectorCount} vectors.`,
+      stats: {
+        originalSize: file.size,
+        chunkCount: chunks.length,
+        vectorCount,
+        contentLength: content.length,
+      },
+    });
+
+
+  } catch (error) {
+    console.error('Upload processing error:', error);
+    
+    return NextResponse.json(
+      { 
+        error: 'Failed to process document', 
+        details: error instanceof Error ? error.message : 'Unknown error' 
+      },
+      { status: 500 }
+    );
+  }
 }
