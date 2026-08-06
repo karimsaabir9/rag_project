@@ -1,8 +1,17 @@
+"use client";
+
 import { FileText, Upload, RefreshCw, MessageSquare } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { FileUpload } from "@/components/ui/file-upload";
 
 export default function Home() {
+
+  const handleFileProcessed = (result: { documentId: string; filename: string }) => {
+    toast.success(`Document "${result.filename}" processed successfully`);
+  };
+
   return (
     <div className=" min-h-screen bg-background flex flex-col">
       {/* Header */}
@@ -61,10 +70,10 @@ export default function Home() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {/* <FileUpload
+                <FileUpload
                   onFileProcessed={handleFileProcessed}
                   maxSize={100 * 1024 * 1024} // 100MB
-                /> */}
+                />
                 <h1>Upload Document</h1>
               </CardContent>
             </Card>
