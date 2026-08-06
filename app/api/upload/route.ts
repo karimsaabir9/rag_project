@@ -2,6 +2,7 @@ import { processDocument } from "@/lib/document-processor";
 import { createDocument, updateDocument } from "@/lib/mongodb";
 import { error } from "console";
 import { NextResponse, NextRequest } from "next/server";
+import { generateEmbeddings } from '@/lib/ai/embeddings';
 
 export async function POST(request: NextRequest) {
   try {
@@ -59,6 +60,10 @@ export async function POST(request: NextRequest) {
 
 
     // 5- Generate embeddings for all chunks
+    const embeddings = await generateEmbeddings(chunks);
+
+
+
     // 6- Store vectors in Pinecone
     // 7- Update document in MongoDB whith completion status
     // 8- Return success response
