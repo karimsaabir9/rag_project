@@ -1,4 +1,5 @@
-import { createDocument } from "@/lib/mongodb";
+import { processDocument } from "@/lib/document-processor";
+import { createDocument, updateDocument } from "@/lib/mongodb";
 import { error } from "console";
 import { NextResponse, NextRequest } from "next/server";
 
@@ -41,11 +42,22 @@ export async function POST(request: NextRequest) {
 
     // 4- Process the document (extract text and create chunks)
 
+    const { content, chunks } = await processDocument(file);
+
+    if (chunks.length === 0) {
+      // Update document status to error
+      await updateDocument(documentId, {
+        status: "error",
+        errorMessage: "No content could be extracted from the file.",
+      });
+
+      return NextResponse.json(
+        { error: "No content could be extracted from the file." },
+        { status: 400 },
+      );
+    }
 
 
-
-
-    
     // 5- Generate embeddings for all chunks
     // 6- Store vectors in Pinecone
     // 7- Update document in MongoDB whith completion status
