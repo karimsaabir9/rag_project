@@ -1,71 +1,72 @@
-import { processDocument } from "@/lib/document-processor";
-import { createDocument, updateDocument } from "@/lib/mongodb";
-import { error } from "console";
-import { NextResponse, NextRequest } from "next/server";
+import { NextRequest, NextResponse } from 'next/server';
+import { processDocument, isFileTypeSupported } from '@/lib/document-processor';
 import { generateEmbeddings } from '@/lib/ai/embeddings';
-import { storeVectors } from "@/lib/pinecone";
+import { storeVectors } from '@/lib/pinecone';
+import { createDocument, updateDocument } from '@/lib/mongodb';
 
 export async function POST(request: NextRequest) {
   try {
-    // 1- Get the file from the request
-
     const formData = await request.formData();
-    const file = formData.get("file") as File;
-
-    // 2- Validate the file
+    const file = formData.get('file') as File;
 
     if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
+      return NextResponse.json(
+        { error: 'No file provided' },
+        { status: 400 }
+      );
     }
 
-    // TODO: Validate the file type
-    // TODO: Validate the file size(10mb limit)
-    const maxSize = 100 * 1024 * 1024; // 100mb in bytes
+    // Validate file type
+    if (!isFileTypeSupported(file)) {
+      return NextResponse.json(
+        { error: 'Unsupported file type. Please upload PDF, DOCX, TXT, or MD files.' },
+        { status: 400 }
+      );
+    }
+
+    // Validate file size (10MB limit)
+    const maxSize = 100 * 1024 * 1024; // 100MB (change this to 10MB if you want to test the system)
     if (file.size > maxSize) {
       return NextResponse.json(
-        { error: "File too large, Maximum size is 100MB." },
-        { status: 400 },
+        { error: 'File too large. Maximum size is 100MB.' },
+        { status: 400 }
       );
     }
 
     // Generate unique document ID
     const documentId = `doc-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
-    // 3- Save the file information to the database
+    // Save document to MongoDB first
     await createDocument({
       documentId,
-      title: file.name.replace(/\.[^/.]+$/, ""), // Remove file extension
+      title: file.name.replace(/\.[^/.]+$/, ''), // Remove file extension
       filename: file.name,
-      fileType: file.name.split(".").pop()?.toLowerCase() || "unknown",
+      fileType: file.name.split('.').pop()?.toLowerCase() || 'unknown',
       fileSize: file.size,
       uploadedAt: new Date(),
-      status: "processing",
+      status: 'processing',
     });
 
-    // 4- Process the document (extract text and create chunks)
-
+    // Process the document (extract text and create chunks)
     const { content, chunks } = await processDocument(file);
 
     if (chunks.length === 0) {
       // Update document status to error
       await updateDocument(documentId, {
-        status: "error",
-        errorMessage: "No content could be extracted from the file.",
+        status: 'error',
+        errorMessage: 'No content could be extracted from the file.'
       });
-
+      
       return NextResponse.json(
-        { error: "No content could be extracted from the file." },
-        { status: 400 },
+        { error: 'No content could be extracted from the file.' },
+        { status: 400 }
       );
     }
 
-
-    // 5- Generate embeddings for all chunks
+    // Generate embeddings for all chunks
     const embeddings = await generateEmbeddings(chunks);
 
-
-
-    // 6- Store vectors in Pinecone
+    // Store vectors in Pinecone
     const vectorCount = await storeVectors(
       documentId,
       embeddings,
@@ -76,9 +77,7 @@ export async function POST(request: NextRequest) {
       }
     );
 
-
-
-    // 7- Update document in MongoDB whith completion status
+    // Update document in MongoDB with completion status
     await updateDocument(documentId, {
       status: 'completed',
       processedAt: new Date(),
@@ -87,9 +86,7 @@ export async function POST(request: NextRequest) {
       contentLength: content.length,
     });
 
-
-
-    // 8- Return success response
+    // Return success response
     return NextResponse.json({
       success: true,
       documentId,
@@ -103,7 +100,6 @@ export async function POST(request: NextRequest) {
       },
     });
 
-
   } catch (error) {
     console.error('Upload processing error:', error);
     
@@ -116,3 +112,12 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+// Handle other HTTP methods
+export async function GET() {
+  return NextResponse.json(
+    { error: 'Method not allowed. Use POST to upload files.' },
+    { status: 405 }
+  );
+}
+

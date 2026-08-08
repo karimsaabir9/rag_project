@@ -1,45 +1,72 @@
-import { NextResponse, NextRequest } from "next/server";
-import { getAllDocuments, deleteDocument } from "@/lib/mongodb";
+import { NextRequest, NextResponse } from 'next/server';
+import { getAllDocuments, getDocument, deleteDocument } from '@/lib/mongodb';
+import { deleteDocumentVectors } from '@/lib/pinecone';
 
+// GET /api/documents - Get all documents
 export async function GET() {
   try {
     const documents = await getAllDocuments();
-    return NextResponse.json({ success: true, documents });
+    
+    return NextResponse.json({
+      success: true,
+      documents: documents.map(doc => ({
+        documentId: doc.documentId,
+        title: doc.title,
+        filename: doc.filename,
+        fileType: doc.fileType,
+        fileSize: doc.fileSize,
+        uploadedAt: doc.uploadedAt,
+        processedAt: doc.processedAt,
+        status: doc.status,
+        chunkCount: doc.chunkCount,
+        vectorCount: doc.vectorCount,
+        contentLength: doc.contentLength,
+      }))
+    });
   } catch (error) {
-    console.error("Failed to fetch documents:", error);
+    console.error('Error fetching documents:', error);
     return NextResponse.json(
-      { error: "Failed to fetch documents" },
-      { status: 500 },
+      { error: 'Failed to fetch documents' },
+      { status: 500 }
     );
   }
 }
 
+// DELETE /api/documents - Delete a document
 export async function DELETE(request: NextRequest) {
   try {
-    const documentId = request.nextUrl.searchParams.get("documentId");
-
+    const { searchParams } = new URL(request.url);
+    const documentId = searchParams.get('documentId');
+    
     if (!documentId) {
       return NextResponse.json(
-        { error: "documentId is required" },
-        { status: 400 },
+        { error: 'Document ID is required' },
+        { status: 400 }
       );
     }
 
-    const deleted = await deleteDocument(documentId);
-
-    if (!deleted) {
+    // Check if document exists
+    const document = await getDocument(documentId);
+    if (!document) {
       return NextResponse.json(
-        { error: "Document not found" },
-        { status: 404 },
+        { error: 'Document not found' },
+        { status: 404 }
       );
     }
 
-    return NextResponse.json({ success: true });
+    // Delete from both Pinecone and MongoDB
+    await deleteDocumentVectors(documentId);
+    await deleteDocument(documentId);
+    
+    return NextResponse.json({
+      success: true,
+      message: 'Document deleted successfully'
+    });
   } catch (error) {
-    console.error("Failed to delete document:", error);
+    console.error('Error deleting document:', error);
     return NextResponse.json(
-      { error: "Failed to delete document" },
-      { status: 500 },
+      { error: 'Failed to delete document' },
+      { status: 500 }
     );
   }
 }

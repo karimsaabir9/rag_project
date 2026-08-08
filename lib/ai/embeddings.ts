@@ -19,7 +19,7 @@ export async function generateEmbeddings(
   }));
 }
 
-//Generate a single embedding for search queries
+// Generate a single embedding for search queries
 export async function generateEmbedding(text: string): Promise<number[]> {
   const { embedding } = await embed({
     model: embeddingModel,
